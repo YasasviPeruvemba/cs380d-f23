@@ -8,7 +8,7 @@ spec:
   restartPolicy: Never
   containers:
   - name: client-container
-    image: sekwonlee/kvs:client
+    image: yperuvemba/cs380dproject:client
     imagePullPolicy: Always
     securityContext:
       privileged: true
