@@ -1,4 +1,4 @@
-FROM sekwonlee/kvs:base
+FROM yperuvemba/cs380dproject:base
 
 MAINTAINER Sekwon Lee <sklee@cs.utexas.edu> version: 0.1
 

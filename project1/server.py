@@ -21,7 +21,8 @@ class KVSRPCServer:
 
     ## get: Get the value associated with the given key.
     def get(self, key):
-        return self.kvs[key]
+        print(self.kvs[key], type(self.kvs[key]))
+        return str(self.kvs[key])
         # return "[Server " + str(serverId) + "] Receive a get request: " + "Key = " + str(key)
 
     ## printKVPairs: Print all the key-value pairs at this server.
