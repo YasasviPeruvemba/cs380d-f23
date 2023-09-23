@@ -1,21 +1,28 @@
 import argparse
 import xmlrpc.client
 import xmlrpc.server
+import collections
 
 serverId = 0
 basePort = 9000
 
 class KVSRPCServer:
+    def __init__(self):
+        self.kvs = collections.defaultdict(int)
     # TODO: You need to implement details for these functions.
 
     ## put: Insert a new-key-value pair or updates an existing
     ## one with new one if the same key already exists.
     def put(self, key, value):
-        return "[Server " + str(serverId) + "] Receive a put request: " + "Key = " + str(key) + ", Val = " + str(value)
+        self.kvs[key] = value
+        return True
+
+        # return "[Server " + str(serverId) + "] Receive a put request: " + "Key = " + str(key) + ", Val = " + str(value)
 
     ## get: Get the value associated with the given key.
     def get(self, key):
-        return "[Server " + str(serverId) + "] Receive a get request: " + "Key = " + str(key)
+        return self.kvs[key]
+        # return "[Server " + str(serverId) + "] Receive a get request: " + "Key = " + str(key)
 
     ## printKVPairs: Print all the key-value pairs at this server.
     def printKVPairs(self):
