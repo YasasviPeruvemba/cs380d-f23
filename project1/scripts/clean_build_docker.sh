@@ -14,6 +14,7 @@ sudo docker build . -f frontend.dockerfile --no-cache -t yperuvemba/cs380dprojec
 sudo docker push yperuvemba/cs380dproject:frontend
 
 sudo docker build . -f server.dockerfile --no-cache -t yperuvemba/cs380dproject:server --network=host
+
 sudo docker push yperuvemba/cs380dproject:server
 
 cd ..
