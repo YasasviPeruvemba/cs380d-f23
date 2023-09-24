@@ -23,7 +23,7 @@ class FrontendRPCServer:
     def put(self, key, value):
         # Lock the key so that nobody reads while it is updated
         self.locked_keys.add(key)
-        resp = "Default : "
+        resp = ""
         faulty_servers=[]
 
         for server, _ in self.kvsServers.items():
@@ -40,7 +40,6 @@ class FrontendRPCServer:
         # release the lock
         self.locked_keys.remove(key)
         
-
         return resp
 
     ## get: This function routes requests from clients to proper
