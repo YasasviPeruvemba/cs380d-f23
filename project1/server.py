@@ -14,7 +14,7 @@ class KVSRPCServer:
     ## put: Insert a new-key-value pair or updates an existing
     ## one with new one if the same key already exists.
     def put(self, key, value):
-        self.kvs[key] = value
+        self.kvs[key] = int(value)
         return True
 
         # return "[Server " + str(serverId) + "] Receive a put request: " + "Key = " + str(key) + ", Val = " + str(value)
@@ -22,12 +22,15 @@ class KVSRPCServer:
     ## get: Get the value associated with the given key.
     def get(self, key):
         print(self.kvs[key], type(self.kvs[key]))
-        return str(self.kvs[key])
+        return self.kvs[key]
         # return "[Server " + str(serverId) + "] Receive a get request: " + "Key = " + str(key)
 
     ## printKVPairs: Print all the key-value pairs at this server.
     def printKVPairs(self):
-        return "[Server " + str(serverId) + "] Receive a request printing all KV pairs stored in this server"
+        res = ""
+        for key, value in self.kvs.items():
+            res += "{} : {}\n".format(key, value)
+        return res
 
     ## shutdownServer: Terminate the server itself normally.
     def shutdownServer(self):
