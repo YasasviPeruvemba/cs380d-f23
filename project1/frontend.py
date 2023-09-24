@@ -20,17 +20,22 @@ class FrontendRPCServer:
     ## put: This function routes requests from clients to proper
     ## servers that are responsible for inserting a new key-value
     ## pair or updating an existing one.
-    def put(self, key, value) -> bool:
+    def put(self, key, value):
         # Lock the key so that nobody reads while it is updated
         self.locked_keys.add(key)
-        resp = False
+        resp = ""
+        faulty_servers=[]
 
-        for server in self.kvsServers.keys():
+        for server, _ in self.kvsServers.items():
             try:
-                resp = resp or self.kvsServers[server].put(key, value)
+                resp += "{}\n".format(str(server))
+                r = self.kvsServers[server].put(key, value)
             except Exception as e:
-                print("Detected failure for server : {}".format(server))
-                self.kvsServers.pop(server)
+                resp += "Detected failure for server : {} {}\n".format(server,e)
+                faulty_servers.append(server)
+        
+        for fault in faulty_servers:
+            self.kvsServers.pop(fault)
         
         # release the lock
         self.locked_keys.remove(key)
@@ -47,7 +52,8 @@ class FrontendRPCServer:
         
         # while we know some server is alive, send the value
         while len(self.kvsServers.keys()) > 0:
-            serverId = self.kvsServers.keys()[random.randint(0, len(self.kvsServers.keys()) - 1)]
+            lst = list(self.kvsServers.keys())
+            serverId = lst[random.randint(0, len(lst) - 1)]
             try:
                 res = self.kvsServers[serverId].get(key)
                 return res
