@@ -47,7 +47,7 @@ class FrontendRPCServer:
         
         # while we know some server is alive, send the value
         while len(self.kvsServers.keys()) > 0:
-            serverId = self.kvsServers.keys()[random.randint(0, len(self.kvsServers.keys()))]
+            serverId = self.kvsServers.keys()[random.randint(0, len(self.kvsServers.keys()) - 1)]
             try:
                 res = self.kvsServers[serverId].get(key)
                 return res

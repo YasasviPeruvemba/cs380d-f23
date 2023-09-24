@@ -11,8 +11,6 @@ RUN apt-get update && apt-get install -y git
 
 RUN git clone https://github.com/YasasviPeruvemba/cs380d-f23.git
 
-RUN git checkout kvstore
-
 ENV KVS_HOME /cs380d-f23/project1
 
 # Install dependencies
