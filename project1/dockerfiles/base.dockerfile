@@ -9,7 +9,11 @@ ENV TZ=Etc/UTC
 
 RUN apt-get update && apt-get install -y git
 
-RUN git clone https://github.com/vijay03/cs380d-f23.git
+RUN git clone https://github.com/YasasviPeruvemba/cs380d-f23.git
+
+COPY server.py /cs380d-f23/project1/server.py
+
+COPY frontend.py /cs380d-f23/project1/frontend.py
 
 ENV KVS_HOME /cs380d-f23/project1
 
