@@ -33,12 +33,13 @@ class KVSRPCServer:
         return res
     
     def copy(self, kvPairs):
-        if len(kvPairs) > 0:
-            kvs = kvPairs.split("\n")
+        kvs = kvPairs.split("\n")[:-1]
+        if len(kvs) > 0:
             for kv in kvs:
-                key, value = kv.split(":")
-                self.kvs[key] = value
-        return "Successful"
+                if len(kv) > 0:
+                    key, value = kv.split(":")
+                    self.kvs[key] = value
+        return kvPairs
 
 
     ## shutdownServer: Terminate the server itself normally.
