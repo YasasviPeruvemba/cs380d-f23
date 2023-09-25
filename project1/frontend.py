@@ -58,7 +58,7 @@ class FrontendRPCServer:
             res = str(response.result())
             if "Failed" in res:
                 faulty_servers.append(int(res.split(":")[1]))
-            resp += str(response.result()) + "\n"
+            resp += res + "\n"
 
         for fault in faulty_servers:
             self.kvsServers.pop(fault, None)
@@ -100,7 +100,7 @@ class FrontendRPCServer:
             resp += "\nTime Taken : {}ns".format(clk2 - clk1)
         except:
             clk2 = time.time_ns()
-            resp = "Server {} is dead. Time Taken : {}".format(serverId, clk2 - clk1)
+            resp = "Server {} is dead. Time Taken : {}ns".format(serverId, clk2 - clk1)
             self.kvsServers.pop(serverId, None)
         return resp
 
@@ -111,7 +111,7 @@ class FrontendRPCServer:
         faulty_servers = []
 
         if len(self.kvsServers) == 0:
-            self.kvsServers[serverId]=new_server
+            self.kvsServers[serverId] = new_server
             return "No active server to copy from"
 
         clk1 = time.time_ns()
@@ -122,7 +122,6 @@ class FrontendRPCServer:
             except Exception as e:
                 faulty_servers.append(server)
                 continue
-            # TODO: handle serverId death
             try:
                 new_server.copy(kvPairs)
                 self.kvsServers[serverId] = new_server
