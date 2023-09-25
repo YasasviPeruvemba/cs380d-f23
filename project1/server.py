@@ -2,6 +2,7 @@ import argparse
 import xmlrpc.client
 import xmlrpc.server
 import collections
+import time
 
 serverId = 0
 basePort = 9000
@@ -15,9 +16,7 @@ class KVSRPCServer:
     ## one with new one if the same key already exists.
     def put(self, key, value):
         self.kvs[key] = int(value)
-        return True
-
-        # return "[Server " + str(serverId) + "] Receive a put request: " + "Key = " + str(key) + ", Val = " + str(value)
+        return "[Server " + str(serverId) + "] Receive a put request: " + "Key = " + str(key) + ", Val = " + str(value)
 
     ## get: Get the value associated with the given key.
     def get(self, key):
@@ -28,8 +27,20 @@ class KVSRPCServer:
     def printKVPairs(self):
         res = ""
         for key, value in self.kvs.items():
-            res += "{} : {}\n".format(key, value)
+            res += "{}:{}\n".format(key, value)
+        if len(res) > 0:
+            return res[:-1]
         return res
+    
+    def copy(self, kvPairs):
+        kvs = kvPairs.split("\n")[:-1]
+        if len(kvs) > 0:
+            for kv in kvs:
+                if len(kv) > 0:
+                    key, value = kv.split(":")
+                    self.kvs[key] = value
+        return kvPairs
+
 
     ## shutdownServer: Terminate the server itself normally.
     def shutdownServer(self):
