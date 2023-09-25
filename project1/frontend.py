@@ -69,6 +69,7 @@ class FrontendRPCServer:
     ## servers that are responsible for getting the value
     ## associated with the given key.
     def get(self, key):
+        clk1 = time.time_ns()
         # Making sure this key is not being updates currently
         while key in self.locked_keys:
             time.sleep(0.001)
@@ -79,12 +80,15 @@ class FrontendRPCServer:
             serverId = lst[random.randint(0, len(lst) - 1)]
             try:
                 res = self.kvsServers[serverId].get(key)
+                clk2 = time.time_ns()
+                res = str(res) + "\nTime Taken : {}ns".format(clk2 - clk1)
                 return res
             except:
+                clk2 = time.time_ns()
                 print("Detected failure for server : {}".format(serverId))
                 self.kvsServers.pop(serverId, None)
         
-        return "None"
+        return "None\nTime Taken : {}ns".format(clk2 - clk1)
 
     ## printKVPairs: This function routes requests to servers
     ## matched with the given serverIds.
