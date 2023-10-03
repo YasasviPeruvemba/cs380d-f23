@@ -15,6 +15,8 @@ COPY server.py /cs380d-f23/project1/server.py
 
 COPY frontend.py /cs380d-f23/project1/frontend.py
 
+COPY run_cluster.py /cs380d-f23/project1/run_cluster.py
+
 ENV KVS_HOME /cs380d-f23/project1
 
 # Install dependencies

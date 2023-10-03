@@ -5,6 +5,12 @@ import subprocess
 import random
 import xmlrpc.client
 
+import time
+
+from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
+
+from multiprocessing import Pool
+
 from shared import util
 
 baseAddr = "http://localhost:"
@@ -22,6 +28,7 @@ def add_nodes(k8s_client, k8s_apps_client, node_type, num_nodes, prefix=None):
     global clientUID
     global serverUID
 
+    result = ""
     for i in range(0, num_nodes):
         if node_type == 'server':
             server_spec = util.load_yaml('yaml/pods/server-pod.yml', prefix)
@@ -31,7 +38,7 @@ def add_nodes(k8s_client, k8s_apps_client, node_type, num_nodes, prefix=None):
             server_spec['metadata']['labels']['role'] = 'server-%d' % serverUID
             k8s_client.create_namespaced_pod(namespace=util.NAMESPACE, body=server_spec)
             util.check_wait_pod_status(k8s_client, 'role=server-%d' % serverUID, 'Running')
-            result = frontend.addServer(serverUID)
+            result += frontend.addServer(serverUID) + "\n"
             serverUID += 1
         elif node_type == 'client':
             client_spec = util.load_yaml('yaml/pods/client-pod.yml', prefix)
@@ -41,11 +48,14 @@ def add_nodes(k8s_client, k8s_apps_client, node_type, num_nodes, prefix=None):
             client_spec['metadata']['labels']['role'] = 'client-%d' % clientUID
             k8s_client.create_namespaced_pod(namespace=util.NAMESPACE, body=client_spec)
             util.check_wait_pod_status(k8s_client, 'role=client-%d' % clientUID, 'Running')
+            result += "Created client {}".format(clientUID) + "\n"
             clientList[clientUID] = xmlrpc.client.ServerProxy(baseAddr + str(baseClientPort + clientUID))
             clientUID += 1
         else:
-            print("Unknown pod type")
-            exit()
+            result += "Unknown pod type"
+            # print("Unknown pod type")
+            # exit()
+    return result[:-1]
 
 def remove_node(k8s_client, k8s_apps_client, node_type, node_id):
     name = node_type + '-pod-%d' % node_id
@@ -54,10 +64,12 @@ def remove_node(k8s_client, k8s_apps_client, node_type, node_id):
     util.check_wait_pod_status(k8s_client, selector, 'Terminating')
 
 def addClient(k8s_client, k8s_apps_client, prefix):
-    add_nodes(k8s_client, k8s_apps_client, 'client', 1, prefix)
+    result = add_nodes(k8s_client, k8s_apps_client, 'client', 1, prefix)
+    print(result)
 
 def addServer(k8s_client, k8s_apps_client, prefix):
-    add_nodes(k8s_client, k8s_apps_client, 'server', 1, prefix)
+    result = add_nodes(k8s_client, k8s_apps_client, 'server', 1, prefix)
+    print(result)
 
 def listServer():
     result = frontend.listServer()
@@ -65,6 +77,7 @@ def listServer():
 
 def killServer(k8s_client, k8s_apps_client, serverId):
     remove_node(k8s_client, k8s_apps_client, 'server', serverId)
+    print("Killed server {}".format(serverId))
 
 def shutdownServer(k8s_client, k8s_apps_client, serverId):
     result = frontend.shutdownServer(serverId)
@@ -72,12 +85,22 @@ def shutdownServer(k8s_client, k8s_apps_client, serverId):
     print(result)
 
 def put(key, value):
-    result = clientList[random.randint(1, 100000) % len(clientList)].put(key, value)
-    print(result)
+    client = random.randint(1, 100000) % len(clientList)
+    try:
+        result = clientList[client].put(key, value)
+    except Exception as e:
+        result = "Exception in put " + str(e)
+    # print(result)
+    return result + "Client = " + str(client) + "\n"
 
-def get(key):
-    result = clientList[random.randint(1, len(clientList)) % len(clientList)].get(key)
-    print(result)
+def get(key, value = None):
+    client = random.randint(1, 100000) % len(clientList)
+    try:
+        result = clientList[client].get(key)
+    except Exception as e:
+        result = "Exception in get " + str(e)
+    # print(result)
+    return result + "Client = " + str(client) + "\n"
 
 def printKVPairs(serverId):
     result = frontend.printKVPairs(serverId)
@@ -94,10 +117,17 @@ def init_cluster(k8s_client, k8s_apps_client, num_client, num_server, ssh_key, p
     frontend = xmlrpc.client.ServerProxy(baseAddr + str(baseFrontendPort))
 
     print('Creating server pods...')
-    add_nodes(k8s_client, k8s_apps_client, 'server', num_server, prefix)
+    result = add_nodes(k8s_client, k8s_apps_client, 'server', num_server, prefix)
+    print(result)
 
     print('Creating client pods...')
-    add_nodes(k8s_client, k8s_apps_client, 'client', num_client, prefix)
+    result = add_nodes(k8s_client, k8s_apps_client, 'client', num_client, prefix)
+    print(result)
+
+def helper_func(key, value = None):
+    if random.random() < 0.1:
+        return put(key, random.randint(100, 200))
+    return get(key)
 
 def event_trigger(k8s_client, k8s_apps_client, prefix):
     terminate = False
@@ -129,6 +159,31 @@ def event_trigger(k8s_client, k8s_apps_client, prefix):
             printKVPairs(serverId)
         elif args[0] == 'terminate':
             terminate = True
+        elif args[0] == "testConcurrency":
+            # executor  = ThreadPoolExecutor(10)
+            key       = 10
+            put(key, 150)
+            # with open("dumped_responses_serial.log", "w") as f:
+            #     for i in range(100):
+            #         if i % 100 == 45:
+            #             resp = put(key, random.randint(100, 200))
+            #         else:
+            #             resp = get(key)
+            #         f.write(resp + "\n")
+
+            # with Pool(16) as p:
+            #     x = p.map(get, [10 for _ in range(10)])
+            
+
+            # responses = [executor.submit(get, key=key) for _ in range(10)]
+            # wait(responses, return_when=ALL_COMPLETED)
+            # # time.sleep(5)
+
+            with open("dumped_responses_parallel.log", "w") as f:
+                with Pool(16) as p:
+                    x = p.map(helper_func, [key for _ in range(100)])
+                    f.write("\n".join(x))
+
         else:
             print("Unknown command")
 
