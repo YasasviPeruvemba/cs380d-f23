@@ -22,14 +22,14 @@ def put_helper(func, server, key, value):
         # resp = "{}".format(server)
         resp = func(key, value)
     except Exception as e:
-        resp = "Failed:{}".format(server)
+        resp = "Failed:{}:{}".format(server, str(e))
     return resp
 
 
 class FrontendRPCServer:
     # TODO: You need to implement details for these functions.
     def __init__(self):
-        self.locked_keys = set()
+        self.locked_keys = defaultdict(Lock)
         self.kvsServers  = dict()
         self.executor = ThreadPoolExecutor(16)
 
@@ -38,7 +38,10 @@ class FrontendRPCServer:
     ## pair or updating an existing one.
     def put(self, key, value):
         # Lock the key so that nobody reads while it is updated
-        self.locked_keys.add(key)
+        if self.locked_keys.get(key, None) is None:
+            self.locked_keys[key] = Lock()
+
+        self.locked_keys[key].acquire()
 
         clk1 = time.time_ns()
         responses = [self.executor.submit(put_helper,
@@ -50,20 +53,20 @@ class FrontendRPCServer:
         clk2 = time.time_ns()
         
         # release the lock
-        self.locked_keys.remove(key)
+        self.locked_keys[key].release()
         
         resp = ""
         faulty_servers = []
         for response in responses:
             res = str(response.result())
-            if "Failed" in res:
+            if res.startswith("Failed"):
                 faulty_servers.append(int(res.split(":")[1]))
             resp += res + "\n"
 
         for fault in faulty_servers:
             self.kvsServers.pop(fault, None)
         
-        return resp + "Time Taken : {}ns".format(clk2 - clk1)
+        return resp + "Time Taken : {}ns\n{}".format(clk2 - clk1, time.time_ns())
 
     ## get: This function routes requests from clients to proper
     ## servers that are responsible for getting the value
@@ -71,24 +74,27 @@ class FrontendRPCServer:
     def get(self, key):
         clk1 = time.time_ns()
         # Making sure this key is not being updates currently
-        while key in self.locked_keys:
-            time.sleep(0.001)
+        if self.locked_keys.get(key, None) is not None:
+            while self.locked_keys[key].locked():
+                time.sleep(0.001)
         
+        res = ""
+        clk2=time.time_ns()
         # while we know some server is alive, send the value
         while len(self.kvsServers.keys()) > 0:
             lst = list(self.kvsServers.keys())
             serverId = lst[random.randint(0, len(lst) - 1)]
             try:
-                res = self.kvsServers[serverId].get(key)
+                get_val = self.kvsServers[serverId].get(key)
                 clk2 = time.time_ns()
-                res = str(res) + "\nTime Taken : {}ns".format(clk2 - clk1)
+                res += str(get_val) + "\nTime Taken : {}ns\n{}\n".format(clk2 - clk1, time.time_ns())
                 return res
-            except:
+            except Exception as e:
                 clk2 = time.time_ns()
-                print("Detected failure for server : {}".format(serverId))
                 self.kvsServers.pop(serverId, None)
+                res += "Detected failure for server : {}\n{} | {}\n".format(serverId, time.time_ns(), str(e))
         
-        return "None\nTime Taken : {}ns".format(clk2 - clk1)
+        return "{}\nTime Taken : {}ns\n{}".format(res, clk2 - clk1, time.time_ns())
 
     ## printKVPairs: This function routes requests to servers
     ## matched with the given serverIds.
