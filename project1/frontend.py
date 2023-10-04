@@ -29,7 +29,7 @@ def put_helper(func, server, key, value):
             resp = "Failed {} times:{}:{}".format(count, server, str(e))
             time.sleep(0.5)
             count += 1
-        
+
     return resp
 
 
@@ -86,7 +86,7 @@ class FrontendRPCServer:
         for response in responses:
             res = str(response.result())
             resp += res + "\n"
-        
+
         return resp + "{}\n".format(time.time_ns())
 
     ## get: This function routes requests from clients to proper

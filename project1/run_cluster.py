@@ -123,7 +123,7 @@ def init_cluster(k8s_client, k8s_apps_client, num_client, num_server, ssh_key, p
     print('Creating client pods...')
     result = add_nodes(k8s_client, k8s_apps_client, 'client', num_client, prefix)
     print(result)
-
+    
 def helper_func(key):
     if random.random() < 0.1:
         return put(key, random.randint(100, 200))
@@ -175,7 +175,6 @@ def event_trigger(k8s_client, k8s_apps_client, prefix):
                     f.write("\n".join(x))
 
             print("Parallel processing is done.")
-
         else:
             print("Unknown command")
 
