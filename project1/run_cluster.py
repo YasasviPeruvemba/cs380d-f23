@@ -123,8 +123,8 @@ def init_cluster(k8s_client, k8s_apps_client, num_client, num_server, ssh_key, p
     print('Creating client pods...')
     result = add_nodes(k8s_client, k8s_apps_client, 'client', num_client, prefix)
     print(result)
-
-def helper_func(key, value = None):
+    
+def helper_func(key):
     if random.random() < 0.1:
         return put(key, random.randint(100, 200))
     return get(key)
@@ -160,30 +160,21 @@ def event_trigger(k8s_client, k8s_apps_client, prefix):
         elif args[0] == 'terminate':
             terminate = True
         elif args[0] == "testConcurrency":
-            # executor  = ThreadPoolExecutor(10)
-            key       = 10
+            key = 10
             put(key, 150)
-            # with open("dumped_responses_serial.log", "w") as f:
-            #     for i in range(100):
-            #         if i % 100 == 45:
-            #             resp = put(key, random.randint(100, 200))
-            #         else:
-            #             resp = get(key)
-            #         f.write(resp + "\n")
+            with open("dumped_responses_serial.log", "w") as f:
+                for _ in range(5000):
+                    resp = helper_func(key)
+                    f.write(resp + "\n")
 
-            # with Pool(16) as p:
-            #     x = p.map(get, [10 for _ in range(10)])
-            
-
-            # responses = [executor.submit(get, key=key) for _ in range(10)]
-            # wait(responses, return_when=ALL_COMPLETED)
-            # # time.sleep(5)
+            print("Serial processing is done.")
 
             with open("dumped_responses_parallel.log", "w") as f:
                 with Pool(16) as p:
-                    x = p.map(helper_func, [key for _ in range(100)])
+                    x = p.map(helper_func, [key for _ in range(5000)])
                     f.write("\n".join(x))
 
+            print("Parallel processing is done.")
         else:
             print("Unknown command")
 
