@@ -12,6 +12,9 @@ class KVSRPCServer:
         self.kvs = collections.defaultdict(int)
     # TODO: You need to implement details for these functions.
 
+    def ping(self):
+        return "pong"
+
     ## put: Insert a new-key-value pair or updates an existing
     ## one with new one if the same key already exists.
     def put(self, key, value):

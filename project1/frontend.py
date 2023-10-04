@@ -9,6 +9,7 @@ import concurrent.futures
 
 import time
 import random
+import threading
 
 baseAddr = "http://localhost:"
 baseServerPort = 9000
@@ -18,11 +19,17 @@ class SimpleThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
 
 
 def put_helper(func, server, key, value):
-    try:
-        # resp = "{}".format(server)
-        resp = func(key, value)
-    except Exception as e:
-        resp = "Failed:{}:{}".format(server, str(e))
+    count = 0
+    while count < 3:
+        try:
+            # resp = "{}".format(server)
+            resp = func(key, value)
+            return resp
+        except Exception as e:
+            resp = "Failed {} times:{}:{}".format(count, server, str(e))
+            time.sleep(0.5)
+            count += 1
+        
     return resp
 
 
@@ -32,6 +39,28 @@ class FrontendRPCServer:
         self.locked_keys = defaultdict(Lock)
         self.kvsServers  = dict()
         self.executor = ThreadPoolExecutor(16)
+        self.heartbeat_thread = threading.Thread(target=self.hearbeat)
+        self.heartbeat_thread.daemon = True
+        self.heartbeat_thread.start()
+
+    def hearbeat(self):
+        while True:
+            time.sleep(1)
+            faulty_servers = []
+            for id, server in self.kvsServers.items():
+                count = 0
+                success = False
+                while count < 5:
+                    try:
+                        server.ping()
+                        success = True
+                        count = 5
+                    except:
+                        count += 1
+                if not success:
+                    faulty_servers.append(id)
+            for serverId in faulty_servers:
+                self.kvsServers.pop(serverId)
 
     ## put: This function routes requests from clients to proper
     ## servers that are responsible for inserting a new key-value
@@ -43,108 +72,84 @@ class FrontendRPCServer:
 
         self.locked_keys[key].acquire()
 
-        clk1 = time.time_ns()
         responses = [self.executor.submit(put_helper,
                                           func=self.kvsServers[server].put,
                                           server=server,
                                           key=key,
                                           value=value) for server, _ in self.kvsServers.items()]
         concurrent.futures.wait(responses, return_when=concurrent.futures.ALL_COMPLETED)
-        clk2 = time.time_ns()
         
         # release the lock
         self.locked_keys[key].release()
         
         resp = ""
-        faulty_servers = []
         for response in responses:
             res = str(response.result())
-            if res.startswith("Failed"):
-                faulty_servers.append(int(res.split(":")[1]))
             resp += res + "\n"
-
-        for fault in faulty_servers:
-            self.kvsServers.pop(fault, None)
         
-        return resp + "Time Taken : {}ns\n{}".format(clk2 - clk1, time.time_ns())
+        return resp + "{}\n".format(time.time_ns())
 
     ## get: This function routes requests from clients to proper
     ## servers that are responsible for getting the value
     ## associated with the given key.
     def get(self, key):
-        clk1 = time.time_ns()
         # Making sure this key is not being updates currently
         if self.locked_keys.get(key, None) is not None:
             while self.locked_keys[key].locked():
                 time.sleep(0.001)
         
         res = ""
-        clk2=time.time_ns()
         # while we know some server is alive, send the value
         while len(self.kvsServers.keys()) > 0:
             lst = list(self.kvsServers.keys())
             serverId = lst[random.randint(0, len(lst) - 1)]
             try:
                 get_val = self.kvsServers[serverId].get(key)
-                clk2 = time.time_ns()
-                res += str(get_val) + "\nTime Taken : {}ns\n{}\n".format(clk2 - clk1, time.time_ns())
+                res += str(get_val) + "\n{}\n".format(time.time_ns())
                 return res
             except Exception as e:
-                clk2 = time.time_ns()
-                self.kvsServers.pop(serverId, None)
                 res += "Detected failure for server : {}\n{} | {}\n".format(serverId, time.time_ns(), str(e))
         
-        return "{}\nTime Taken : {}ns\n{}".format(res, clk2 - clk1, time.time_ns())
+        return "No active server.\n{}\n".format(res, time.time_ns())
 
     ## printKVPairs: This function routes requests to servers
     ## matched with the given serverIds.
     def printKVPairs(self, serverId):
-        clk1 = time.time_ns()
-        try:
-            resp = self.kvsServers[serverId].printKVPairs()
-            clk2 = time.time_ns()
-            resp += "\nTime Taken : {}ns".format(clk2 - clk1)
-        except:
-            clk2 = time.time_ns()
-            resp = "Server {} is dead. Time Taken : {}ns".format(serverId, clk2 - clk1)
-            self.kvsServers.pop(serverId, None)
+        count = 0
+        while count < 3:
+            try:
+                resp = self.kvsServers[serverId].printKVPairs()
+                return resp
+            except:
+                resp = "Server {} is dead after retrying 3 times.".format(serverId)
+                count += 1
         return resp
 
     ## addServer: This function registers a new server with the
     ## serverId to the cluster membership.
     def addServer(self, serverId):
         new_server = xmlrpc.client.ServerProxy(baseAddr + str(baseServerPort + serverId))
-        faulty_servers = []
 
         if len(self.kvsServers) == 0:
             self.kvsServers[serverId] = new_server
             return "No active server to copy from"
 
-        clk1 = time.time_ns()
         # Copy data from any other server
         for server, _ in self.kvsServers.items():
             try:
                 kvPairs = self.printKVPairs(server)
             except Exception as e:
-                faulty_servers.append(server)
                 continue
             try:
                 new_server.copy(kvPairs)
                 self.kvsServers[serverId] = new_server
-                clk2 = time.time_ns()
-                return "Copy Succeeded. Time Taken : {}ns".format(clk2 - clk1)
+                return "Copy Succeeded for {}.".format(serverId)
             except Exception as e:
-                clk2 = time.time_ns()
-                return "New Server Died. Time Taken : {}ns".format(clk2 - clk1)
-            
-        clk2 = time.time_ns()
+                return "New Server {} Died.".format(serverId)
 
         self.kvsServers[serverId] = new_server
 
-        for fault in faulty_servers:
-            self.kvsServers.pop(fault, None)
-
-        return "Copy Failed. Time Taken : {}ns".format(clk2 - clk1)
+        return "Copy Failed for {}.".format(serverId)
 
     ## listServer: This function prints out a list of servers that
     ## are currently active/alive inside the cluster.
