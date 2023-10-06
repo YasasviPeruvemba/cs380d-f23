@@ -23,7 +23,9 @@ class KVSRPCServer:
 
     ## get: Get the value associated with the given key.
     def get(self, key):
-        return self.kvs[key]
+        if self.kvs.get(key, None) is None:
+            return "ERR_KEY"
+        return "{}:{}".format(key, self.kvs[key])
         # return "[Server " + str(serverId) + "] Receive a get request: " + "Key = " + str(key)
 
     ## printKVPairs: Print all the key-value pairs at this server.
@@ -32,7 +34,7 @@ class KVSRPCServer:
         for key, value in self.kvs.items():
             res += "{}:{}\n".format(key, value)
         if len(res) > 0:
-            return res[:-1]
+            res = res[:-1]
         return res
     
     def copy(self, kvPairs):

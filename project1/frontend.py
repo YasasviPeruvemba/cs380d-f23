@@ -20,17 +20,18 @@ class SimpleThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
 
 def put_helper(func, server, key, value):
     count = 0
+    resp = ""
     while count < 3:
         try:
             # resp = "{}".format(server)
-            resp = func(key, value)
+            resp += func(key, value) + "\n"
             return resp
         except Exception as e:
-            resp = "Failed {} times:{}:{}".format(count, server, str(e))
-            time.sleep(0.5)
+            resp += "Failed {} times:{}:{}\n".format(count, server, str(e))
             count += 1
+            time.sleep(0.05 * count)
 
-    return resp
+    return resp[:-1]
 
 
 class FrontendRPCServer:
@@ -50,12 +51,13 @@ class FrontendRPCServer:
             for id, server in self.kvsServers.items():
                 count = 0
                 success = False
-                while count < 5:
+                while count < 10:
                     try:
                         server.ping()
                         success = True
-                        count = 5
+                        count = 10
                     except:
+                        time.sleep(0.05 * count)
                         count += 1
                 if not success:
                     faulty_servers.append(id)
@@ -96,7 +98,7 @@ class FrontendRPCServer:
         # Making sure this key is not being updates currently
         if self.locked_keys.get(key, None) is not None:
             while self.locked_keys[key].locked():
-                time.sleep(0.001)
+                time.sleep(0.0001)
         
         res = ""
         # while we know some server is alive, send the value
@@ -105,12 +107,14 @@ class FrontendRPCServer:
             serverId = lst[random.randint(0, len(lst) - 1)]
             try:
                 get_val = self.kvsServers[serverId].get(key)
-                res += str(get_val) + "\n{}\n".format(time.time_ns())
-                return res
+                # res += str(get_val) + "\n{}\n".format(time.time_ns())
+                # return res
+                return get_val
             except Exception as e:
                 res += "Detected failure for server : {}\n{} | {}\n".format(serverId, time.time_ns(), str(e))
         
-        return "No active server.\n{}\n".format(res, time.time_ns())
+        # return "No active server.\n{}\n".format(res, time.time_ns())
+        return "ERR_NOEXIST"
 
     ## printKVPairs: This function routes requests to servers
     ## matched with the given serverIds.
@@ -156,8 +160,10 @@ class FrontendRPCServer:
     def listServer(self):
         serverList = []
         for serverId, _ in self.kvsServers.items():
-            serverList.append(serverId)
-        return serverList
+            serverList.append(str(serverId))
+        if len(serverList) == 0:
+            return "ERR_NOSERVERS"
+        return ",".join(serverList)
 
     ## shutdownServer: This function routes the shutdown request to
     ## a server matched with the specified serverId to let the corresponding
