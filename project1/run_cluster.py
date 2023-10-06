@@ -91,7 +91,7 @@ def put(key, value):
     except Exception as e:
         result = "Exception in put " + str(e)
     # print(result)
-    return result + "Client = " + str(client) + "\n"
+    return result
 
 def get(key, value = None):
     client = random.randint(1, 100000) % len(clientList)
@@ -100,7 +100,7 @@ def get(key, value = None):
     except Exception as e:
         result = "Exception in get " + str(e)
     # print(result)
-    return result + "Client = " + str(client) + "\n"
+    return result
 
 def printKVPairs(serverId):
     result = frontend.printKVPairs(serverId)
@@ -109,13 +109,20 @@ def printKVPairs(serverId):
 def loadDataset(thread_id, keys, load_vals, num_threads):
     start_idx = int((len(keys) / num_threads) * thread_id)
     end_idx = int(start_idx + (int((len(keys) / num_threads))))
-
+    failed = 0
     for idx in range(start_idx, end_idx):
-        result = clientList[thread_id].put(keys[idx], load_vals[idx])
+        try:
+            result = clientList[thread_id].put(keys[idx], load_vals[idx])
+            if "Failed" in result:
+                failed += 1
+        except:
+            print("[Error in thread %d] put request fail, key = %d, val = %d" % (thread_id, keys[idx], load_vals[idx]))
+            return
+    print("Number of failed puts : {}".format(failed))
 
 def runWorkload(k8s_client, k8s_apps_client, prefix, thread_id,
                 keys, load_vals, run_vals, num_threads, num_requests,
-                put_ratio, test_consistency, crash_server, add_server, remove_server):
+                put_ratio, test_consistency, crash_server, add_server, remove_server, optype):
     request_count = 0
     start_idx = int((len(keys) / num_threads) * thread_id)
     end_idx = int(start_idx + (int((len(keys) / num_threads))))
@@ -134,36 +141,45 @@ def runWorkload(k8s_client, k8s_apps_client, prefix, thread_id,
                 elif remove_server == 1:
                     shutdownServer(k8s_client, k8s_apps_client, serverToKill)
             newval = random.randint(0, 1000000)
-            res = clientList[thread_id].put(keys[idx], newval)
-            result = clientList[thread_id].get(keys[idx])
-            if "Failed" not in res:
+            try:
+                clientList[thread_id].put(keys[idx], newval)
+            except:
+                print("[Error in thread %d] put request fail, key = %d, val = %d" % (thread_id, keys[idx], newval))
+                return
+            try:
+                result = clientList[thread_id].get(keys[idx])
                 result = result.split(':')
                 if int(result[0]) != keys[idx] or int(result[1]) != newval:
                     print("[Error] request = (%d, %d), return = (%d, %d) on thread : %d" % (keys[idx], newval, int(result[0]), int(result[1]), thread_id))
                     return
+            except:
+                print("[Error in thread %d] get request fail, key = %d", keys[idx])
+                return
             request_count += 1
     else:
-        print("Thread {} is here..".format(thread_id))
-        optype = []
-        for i in range(0, 100):
-            if (i % 100) < put_ratio:
-                optype.append("Put")
-            else:
-                optype.append("Get")
-        random.seed(42)
-        random.shuffle(optype)
-
+        failed = 0
         while num_requests > request_count:
             for idx in range(start_idx, end_idx):
                 if request_count == num_requests:
                     break
                 if optype[idx % 100] == "Put":
-                    result = clientList[thread_id].put(keys[idx], run_vals[idx])
+                    try:
+                        result = clientList[thread_id].put(keys[idx], run_vals[idx])
+                        if "Server" not in result:
+                            failed += 1
+                    except:
+                        print("[Error in thread %d] put request fail, key = %d, val = %d" % (thread_id, keys[idx], run_vals[idx]))
+                        return
                 elif optype[idx % 100] == "Get":
-                    result = clientList[thread_id].get(keys[idx])
-                    result = result.split(':')
-                    if int(result[0]) != keys[idx] or int(result[1]) != load_vals[idx]:
-                        print("[Error] request = (%d, %d), return = (%d, %d) in thread %d" % (keys[idx], load_vals[idx], int(result[0]), int(result[1]), thread_id))
+                    try:
+                        result = clientList[thread_id].get(keys[idx])
+                        result = result.split(':')
+                        if int(result[0]) != keys[idx] or int(result[1]) != load_vals[idx]:
+                            print("Number of failed puts : {}".format(failed))
+                            print("[Error] request = (%d, %d), return = (%d, %d) in thread %d" % (keys[idx], load_vals[idx], int(result[0]), int(result[1]), thread_id))
+                            return
+                    except:
+                        print("[Error in thread %d] get request fail, key = %d", keys[idx])
                         return
                 else:
                     print("[Error] unknown operation type")
@@ -172,7 +188,7 @@ def runWorkload(k8s_client, k8s_apps_client, prefix, thread_id,
 
 def testKVS(k8s_client, k8s_apps_client, prefix, num_keys, num_threads,
             num_requests, put_ratio, test_consistency=0, crash_server=0,
-            add_server=0, remove_server=0):
+            add_server=0, remove_server=0, run_num=0):
     serverList = frontend.listServer()
     serverList = serverList.split(',')
     if len(serverList) < 1:
@@ -193,6 +209,27 @@ def testKVS(k8s_client, k8s_apps_client, prefix, num_keys, num_threads,
     random.shuffle(load_vals)
     random.shuffle(run_vals)
 
+    optype = []
+    for i in range(0, 100):
+        if (i % 100) < put_ratio:
+            optype.append("Put")
+        else:
+            optype.append("Get")
+    random.seed(42)
+    random.shuffle(optype)
+
+    with open("load_values_{}.log".format(run_num), "w") as f:
+        for key, load in zip(keys, load_vals):
+            f.write("{}:{}\n".format(key, load))
+
+    with open("run_values_{}.log".format(run_num), "w") as f:
+        for key, run in zip(keys, run_vals):
+            f.write("{}:{}\n".format(key, run))
+
+    with open("put_get_values_{}.log".format(run_num), "w") as f:
+        for i, key in enumerate(keys):
+            f.write("{}:{}\n".format(key, optype[i % 100]))
+
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=num_threads)
     start = time.time()
     for thread_id in range(0, num_threads):
@@ -207,7 +244,7 @@ def testKVS(k8s_client, k8s_apps_client, prefix, num_keys, num_threads,
         pool.submit(runWorkload, k8s_client, k8s_apps_client, prefix,
                     thread_id, keys, load_vals, run_vals,
                     num_threads, int(num_requests / num_threads), put_ratio,
-                    test_consistency, crash_server, add_server, remove_server)
+                    test_consistency, crash_server, add_server, remove_server, optype)
     pool.shutdown(wait=True)
     end = time.time()
     print("Run throughput = " + str(round(num_requests/(end - start), 1)) + "ops/sec")
@@ -237,6 +274,7 @@ def helper_func(key):
 
 def event_trigger(k8s_client, k8s_apps_client, prefix):
     terminate = False
+    run_num = 0
     while terminate != True:
         cmd = input("Enter a command: ")
         args = cmd.split(':')
@@ -256,10 +294,12 @@ def event_trigger(k8s_client, k8s_apps_client, prefix):
         elif args[0] == 'put':
             key = int(args[1])
             value = int(args[2])
-            put(key, value)
+            res = put(key, value)
+            print(res)
         elif args[0] == 'get':
             key = int(args[1])
-            get(key)
+            res = get(key)
+            print(res)
         elif args[0] == 'printKVPairs':
             serverId = int(args[1])
             printKVPairs(serverId)
@@ -292,7 +332,8 @@ def event_trigger(k8s_client, k8s_apps_client, prefix):
             remove_server = int(args[8])
             testKVS(k8s_client, k8s_apps_client, prefix, num_keys, num_threads,
                     num_requests, put_ratio, test_consistency, crash_server,
-                    add_server, remove_server)
+                    add_server, remove_server, run_num)
+            run_num += 1
         else:
             print("Unknown command")
 

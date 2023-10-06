@@ -21,15 +21,15 @@ class SimpleThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
 def put_helper(func, server, key, value):
     count = 0
     resp = ""
-    while count < 3:
+    while count < 20:
         try:
             # resp = "{}".format(server)
-            resp += func(key, value) + "\n"
+            resp = func(key, value) + "\n"
             return resp
         except Exception as e:
-            resp += "Failed {} times:{}:{}\n".format(count, server, str(e))
+            resp = "Failed {} times:{}:{}\n".format(count, server, str(e))
             count += 1
-            time.sleep(0.05 * count)
+            time.sleep(0.06 * count)
 
     return resp[:-1]
 
